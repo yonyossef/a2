@@ -74,6 +74,8 @@ class NVDAStockAgent:
             # Check for SendGrid API key first (preferred for cloud platforms)
             self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
             
+            print(f"DEBUG: SENDGRID_API_KEY present: {bool(self.sendgrid_api_key)}")
+            
             if self.sendgrid_api_key:
                 # Using SendGrid API
                 self.email_from = os.getenv("EMAIL_FROM", os.getenv("EMAIL_USERNAME", "noreply@example.com"))
