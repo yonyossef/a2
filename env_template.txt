@@ -1,0 +1,9 @@
+# Twilio Configuration
+# Get these from https://console.twilio.com/
+# Copy this file to .env and fill in your values
+
+TWILIO_ACCOUNT_SID=your_account_sid_here
+TWILIO_AUTH_TOKEN=your_auth_token_here
+TWILIO_PHONE_NUMBER=+1234567890
+YOUR_PHONE_NUMBER=+1234567890
+
