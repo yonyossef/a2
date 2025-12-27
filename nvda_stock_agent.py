@@ -16,6 +16,14 @@ from datetime import datetime
 from twilio.rest import Client
 from dotenv import load_dotenv
 
+# Try to import SendGrid (optional)
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+    SENDGRID_AVAILABLE = True
+except ImportError:
+    SENDGRID_AVAILABLE = False
+
 # Load environment variables
 load_dotenv()
 
@@ -63,18 +71,42 @@ class NVDAStockAgent:
         
         # Email configuration (only if email is enabled)
         if self.email_notify_enable:
-            self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-            self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-            self.email_username = os.getenv("EMAIL_USERNAME")
-            self.email_password = os.getenv("EMAIL_PASSWORD")
-            self.email_to = os.getenv("EMAIL_TO")
+            # Check for SendGrid API key first (preferred for cloud platforms)
+            self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
             
-            # Validate email credentials
-            if not all([self.email_username, self.email_password, self.email_to]):
-                raise ValueError(
-                    "Email notifications enabled but missing email credentials.\n"
-                    "Required: EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_TO"
-                )
+            if self.sendgrid_api_key:
+                # Using SendGrid API
+                self.email_from = os.getenv("EMAIL_FROM", os.getenv("EMAIL_USERNAME", "noreply@example.com"))
+                self.email_to = os.getenv("EMAIL_TO")
+                
+                if not self.email_to:
+                    raise ValueError(
+                        "Email notifications enabled with SendGrid but missing EMAIL_TO.\n"
+                        "Required: SENDGRID_API_KEY, EMAIL_TO"
+                    )
+                
+                if SENDGRID_AVAILABLE:
+                    self.sendgrid_client = SendGridAPIClient(self.sendgrid_api_key)
+                else:
+                    raise ValueError(
+                        "SendGrid API key provided but sendgrid package not installed.\n"
+                        "Run: pip install sendgrid"
+                    )
+            else:
+                # Fallback to SMTP
+                self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+                self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+                self.email_username = os.getenv("EMAIL_USERNAME")
+                self.email_password = os.getenv("EMAIL_PASSWORD")
+                self.email_to = os.getenv("EMAIL_TO")
+                self.sendgrid_client = None
+                
+                # Validate SMTP credentials
+                if not all([self.email_username, self.email_password, self.email_to]):
+                    raise ValueError(
+                        "Email notifications enabled but missing email credentials.\n"
+                        "Required: SENDGRID_API_KEY (preferred) OR (EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_TO)"
+                    )
         
         # Print notification configuration
         enabled_methods = []
@@ -179,35 +211,96 @@ Time: {timestamp}"""
             return False
     
     def send_email(self, subject, message_text, message_html=None):
-        """Send email notification"""
+        """Send email notification using SendGrid API or SMTP"""
         if not self.email_notify_enable:
             return False
         
-        try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = self.email_username
-            msg['To'] = self.email_to
-            
-            # Add text and HTML parts
-            text_part = MIMEText(message_text, 'plain')
-            msg.attach(text_part)
-            
-            if message_html:
-                html_part = MIMEText(message_html, 'html')
-                msg.attach(html_part)
-            
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
+        # Use SendGrid API if available (preferred for cloud platforms)
+        if hasattr(self, 'sendgrid_client') and self.sendgrid_client is not None:
+            try:
+                message = Mail(
+                    from_email=self.email_from,
+                    to_emails=self.email_to,
+                    subject=subject,
+                    plain_text_content=message_text,
+                    html_content=message_html if message_html else None
+                )
+                
+                response = self.sendgrid_client.send(message)
+                print(f"Email sent successfully via SendGrid to {self.email_to} (Status: {response.status_code})")
+                return True
+            except Exception as e:
+                error_msg = str(e)
+                print(f"Error sending email via SendGrid: {error_msg}")
+                
+                # Provide helpful error messages
+                if "403" in error_msg or "Forbidden" in error_msg:
+                    print("\n⚠️  SendGrid 403 Forbidden - Common causes:")
+                    print("  1. Sender email not verified in SendGrid")
+                    print("     → Go to https://app.sendgrid.com/settings/sender_auth/senders")
+                    print("     → Verify your sender email address")
+                    print("  2. API key doesn't have 'Mail Send' permissions")
+                    print("     → Check API key permissions at https://app.sendgrid.com/settings/api_keys")
+                    print(f"  3. Current sender: {self.email_from}")
+                
+                return False
+        
+        # Fallback to SMTP
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = self.email_username
+        msg['To'] = self.email_to
+        
+        # Add text and HTML parts
+        text_part = MIMEText(message_text, 'plain')
+        msg.attach(text_part)
+        
+        if message_html:
+            html_part = MIMEText(message_html, 'html')
+            msg.attach(html_part)
+        
+        # Try multiple SMTP configurations (some cloud platforms block certain ports)
+        smtp_configs = [
+            (self.smtp_server, self.smtp_port, 'tls'),  # Standard TLS
+            (self.smtp_server, 465, 'ssl'),  # SSL on port 465
+            (self.smtp_server, 25, 'tls'),  # Fallback port 25
+        ]
+        
+        last_error = None
+        for smtp_host, smtp_port, connection_type in smtp_configs:
+            try:
+                print(f"Attempting to send email via {smtp_host}:{smtp_port} ({connection_type})...")
+                
+                if connection_type == 'ssl':
+                    # Use SSL connection
+                    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
+                else:
+                    # Use TLS connection
+                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+                    server.starttls()
+                
                 server.login(self.email_username, self.email_password)
                 server.send_message(msg)
-            
-            print(f"Email sent successfully to {self.email_to}")
-            return True
-        except Exception as e:
-            print(f"Error sending email: {e}")
-            return False
+                server.quit()
+                
+                print(f"Email sent successfully to {self.email_to}")
+                return True
+                
+            except (smtplib.SMTPException, OSError, ConnectionError) as e:
+                last_error = e
+                print(f"Failed to send via {smtp_host}:{smtp_port} - {e}")
+                continue
+            except Exception as e:
+                last_error = e
+                print(f"Unexpected error with {smtp_host}:{smtp_port} - {e}")
+                continue
+        
+        # If all attempts failed
+        print(f"Error: All email sending attempts failed. Last error: {last_error}")
+        print("Note: Railway may block outbound SMTP connections. Consider using SendGrid API:")
+        print("  - Set SENDGRID_API_KEY environment variable")
+        print("  - Get API key from https://app.sendgrid.com/settings/api_keys")
+        return False
     
     def check_and_notify(self):
         """Check stock price and send notifications"""
