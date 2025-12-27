@@ -1,9 +1,21 @@
-# Twilio Configuration
-# Get these from https://console.twilio.com/
-# Copy this file to .env and fill in your values
+# Notification Settings
+# Enable/disable notification methods (True/False)
+SMS_NOTIFY_ENABLE=False
+EMAIL_NOTIFY_ENABLE=True
 
+# Twilio Configuration (Required if SMS_NOTIFY_ENABLE=True)
+# Get these from https://console.twilio.com/
 TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
 TWILIO_PHONE_NUMBER=+1234567890
 YOUR_PHONE_NUMBER=+1234567890
+
+# Email Configuration (Required if EMAIL_NOTIFY_ENABLE=True)
+# For Gmail: Use an App Password (not your regular password)
+# Generate at: https://myaccount.google.com/apppasswords
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EMAIL_USERNAME=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password_here
+EMAIL_TO=recipient@example.com
 

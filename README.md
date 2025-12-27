@@ -1,14 +1,16 @@
 # NVDA Stock Price Monitor Agent
 
-An AI agent that checks NVIDIA (NVDA) stock price every hour and sends SMS notifications to your phone.
+An AI agent that checks NVIDIA (NVDA) stock price every hour and sends SMS and/or Email notifications.
 
 ## Features
 
 - ✅ Fetches real-time NVDA stock price using Yahoo Finance
-- ✅ Sends SMS notifications via Twilio
+- ✅ Optional SMS notifications via Twilio
+- ✅ Optional Email notifications via SMTP
 - ✅ Runs automatically every hour
 - ✅ Shows current price, previous close, and daily change
 - ✅ Beautiful formatted messages with emojis
+- ✅ Flexible notification configuration (enable/disable SMS or Email independently)
 
 ## Setup Instructions
 
@@ -18,7 +20,23 @@ An AI agent that checks NVIDIA (NVDA) stock price every hour and sends SMS notif
 pip install -r requirements.txt
 ```
 
-### 2. Set Up Twilio Account
+### 2. Choose Notification Method(s)
+
+You can enable SMS notifications, Email notifications, or both. At least one must be enabled.
+
+#### Option A: SMS Notifications (via Twilio)
+
+If you want SMS notifications, set `SMS_NOTIFY_ENABLE=True` in your `.env` file and follow the Twilio setup below.
+
+#### Option B: Email Notifications
+
+If you want Email notifications, set `EMAIL_NOTIFY_ENABLE=True` in your `.env` file and follow the Email setup below.
+
+#### Option C: Both
+
+You can enable both by setting both flags to `True` in your `.env` file.
+
+### 2A. Set Up Twilio Account (For SMS)
 
 #### Step 1: Create a Twilio Account
 
@@ -60,6 +78,31 @@ pip install -r requirements.txt
 - Trial accounts have a credit limit (usually enough for testing)
 - Phone numbers must be in E.164 format: `+[country code][number]` (e.g., `+14155551234` for US)
 
+### 2B. Set Up Email (For Email Notifications)
+
+#### For Gmail Users:
+
+1. **Enable 2-Factor Authentication** on your Google account
+   - Go to https://myaccount.google.com/security
+   - Enable 2-Step Verification if not already enabled
+
+2. **Generate an App Password:**
+   - Go to https://myaccount.google.com/apppasswords
+   - Select "Mail" and "Other (Custom name)"
+   - Enter "NVDA Stock Agent" as the name
+   - Click "Generate"
+   - Copy the 16-character password (you'll use this as `EMAIL_PASSWORD`)
+
+3. **Use your Gmail address** as `EMAIL_USERNAME`
+
+#### For Other Email Providers:
+
+- **Outlook/Hotmail:** Use `smtp-mail.outlook.com` on port `587`
+- **Yahoo:** Use `smtp.mail.yahoo.com` on port `587`
+- **Custom SMTP:** Check your email provider's SMTP settings
+
+**Important:** Most email providers require an "App Password" or "Application Password" instead of your regular password for SMTP access.
+
 ### 3. Configure Environment Variables
 
 1. Copy the template file to create your `.env` file:
@@ -67,31 +110,45 @@ pip install -r requirements.txt
    cp env_template.txt .env
    ```
 
-2. Edit `.env` and add your Twilio credentials from Step 2:
+2. Edit `.env` and configure your notification methods:
    ```bash
    nano .env
    # or use your preferred text editor
    ```
 
-3. Fill in your values:
+3. **Enable notification methods:**
+   ```
+   SMS_NOTIFY_ENABLE=False
+   EMAIL_NOTIFY_ENABLE=True
+   ```
+
+4. **If SMS is enabled, add Twilio credentials:**
    ```
    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    TWILIO_AUTH_TOKEN=your_auth_token_here
    TWILIO_PHONE_NUMBER=+1234567890
    YOUR_PHONE_NUMBER=+1234567890
    ```
-
-   Replace:
-   - `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` with your Account SID from Twilio Console
-   - `your_auth_token_here` with your Auth Token from Twilio Console
-   - `+1234567890` (TWILIO_PHONE_NUMBER) with the Twilio phone number you bought
-   - `+1234567890` (YOUR_PHONE_NUMBER) with your verified personal phone number
-
+   
    **Important**: 
    - Phone numbers must be in E.164 format: `+[country code][number]`
    - Example for US: `+14155551234`
    - Example for UK: `+447911123456`
    - No spaces, dashes, or parentheses
+
+5. **If Email is enabled, add email credentials:**
+   ```
+   SMTP_SERVER=smtp.gmail.com
+   SMTP_PORT=587
+   EMAIL_USERNAME=your_email@gmail.com
+   EMAIL_PASSWORD=your_app_password_here
+   EMAIL_TO=recipient@example.com
+   ```
+   
+   - `EMAIL_USERNAME`: Your email address (sender)
+   - `EMAIL_PASSWORD`: App password (not your regular password!)
+   - `EMAIL_TO`: Recipient email address (can be the same as EMAIL_USERNAME)
+   - `SMTP_SERVER` and `SMTP_PORT`: Defaults to Gmail if not specified
 
 ### 4. Run the Agent
 
@@ -102,7 +159,7 @@ python nvda_stock_agent.py
 The agent will:
 - Check the stock price immediately
 - Then check every hour automatically
-- Send SMS notifications each time
+- Send notifications (SMS and/or Email) each time based on your configuration
 
 Press `Ctrl+C` to stop the agent.
 
@@ -242,15 +299,88 @@ crontab -e
 **Pros:** Free tier, easy setup, automatic deployments  
 **Cons:** Free tier spins down after inactivity (not ideal for hourly checks)
 
-#### B. Railway (Free Trial)
+#### B. Railway (Free Trial) ⭐ Recommended for Cloud Hosting
 
-1. Sign up at https://railway.app
-2. Create new project → Deploy from GitHub
-3. Add environment variables
-4. Deploy!
+**Installation:**
 
-**Pros:** Simple, good free trial  
-**Cons:** Paid after trial
+```bash
+# Install Railway CLI
+curl -fsSL https://railway.app/install.sh | sh
+
+# Verify installation
+railway --version
+```
+
+**Deployment Steps:**
+
+1. **Sign up and Login:**
+   ```bash
+   # Login to Railway (opens browser)
+   railway login
+   ```
+   - If you don't have an account, sign up at https://railway.app
+   - The CLI will open your browser for authentication
+
+2. **Initialize Railway Project:**
+   ```bash
+   cd /home/yonyossef/a2
+   railway init
+   ```
+   - Choose "Empty Project" when prompted
+   - Give it a name (e.g., "nvda-stock-agent")
+
+3. **Set Environment Variables:**
+   ```bash
+   # Enable notification methods
+   railway variables set SMS_NOTIFY_ENABLE=False
+   railway variables set EMAIL_NOTIFY_ENABLE=True
+   
+   # If SMS is enabled, set Twilio credentials
+   railway variables set TWILIO_ACCOUNT_SID=your_account_sid
+   railway variables set TWILIO_AUTH_TOKEN=your_auth_token
+   railway variables set TWILIO_PHONE_NUMBER=+1234567890
+   railway variables set YOUR_PHONE_NUMBER=+1234567890
+   
+   # If Email is enabled, set email credentials
+   railway variables set SMTP_SERVER=smtp.gmail.com
+   railway variables set SMTP_PORT=587
+   railway variables set EMAIL_USERNAME=your_email@gmail.com
+   railway variables set EMAIL_PASSWORD=your_app_password
+   railway variables set EMAIL_TO=recipient@example.com
+   ```
+
+4. **Deploy:**
+   ```bash
+   railway up
+   ```
+   - This will build and deploy your project
+   - Railway will detect Python and install dependencies from `requirements.txt`
+
+5. **Monitor Your Deployment:**
+   ```bash
+   # View logs
+   railway logs
+   
+   # Open dashboard in browser
+   railway open
+   ```
+
+**Alternative: Deploy from GitHub (Web UI)**
+
+1. Go to https://railway.app
+2. Click "New Project" → "Deploy from GitHub repo"
+3. Select your `a2` repository
+4. Add environment variables in the dashboard (Settings → Variables)
+5. Railway will automatically deploy!
+
+**Pros:** 
+- Simple CLI and web interface
+- Good free trial ($5 credit)
+- Automatic deployments from GitHub
+- Easy environment variable management
+
+**Cons:** 
+- Paid after trial credit runs out (~$5-10/month for always-on service)
 
 #### C. Heroku (Paid)
 
@@ -331,9 +461,11 @@ The agent will run in the background and automatically restart if your WSL sessi
 - **For Cloud (Paid):** DigitalOcean App Platform
 - **For Full Control:** VPS with systemd service
 
-## SMS Message Format
+## Notification Message Format
 
-You'll receive messages like this:
+### SMS Format
+
+You'll receive SMS messages like this:
 
 ```
 NVDA Stock Update 📈
@@ -345,16 +477,37 @@ Change: $1.20 (0.97%)
 Time: 2024-01-15 14:30:00
 ```
 
+### Email Format
+
+Email notifications include both plain text and HTML formatting with color-coded price changes (green for up, red for down).
+
 ## Troubleshooting
 
-### "Missing Twilio credentials" error
-- Make sure your `.env` file exists and contains all required variables
+### "At least one notification method must be enabled" error
+- Make sure you have `SMS_NOTIFY_ENABLE=True` and/or `EMAIL_NOTIFY_ENABLE=True` in your `.env` file
+- At least one notification method must be enabled
+
+### "Missing Twilio credentials" error (SMS)
+- Make sure `SMS_NOTIFY_ENABLE=True` is set
+- Verify your `.env` file contains all required Twilio variables
 - Check that variable names match exactly (case-sensitive)
+
+### "Missing email credentials" error (Email)
+- Make sure `EMAIL_NOTIFY_ENABLE=True` is set
+- Verify your `.env` file contains: `EMAIL_USERNAME`, `EMAIL_PASSWORD`, and `EMAIL_TO`
+- For Gmail, make sure you're using an App Password, not your regular password
 
 ### SMS not received
 - Verify your phone number is correct in E.164 format
 - For Twilio trial accounts, make sure you've verified your phone number
 - Check Twilio Console for any error messages
+
+### Email not received
+- Check your spam/junk folder
+- Verify you're using an App Password (not your regular password) for Gmail
+- Check SMTP server and port settings
+- Verify `EMAIL_TO` address is correct
+- Check email provider's SMTP requirements (some require App Passwords)
 
 ### Stock price fetch errors
 - Check your internet connection
