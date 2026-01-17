@@ -15,6 +15,7 @@ import yfinance as yf
 from datetime import datetime
 from twilio.rest import Client
 from dotenv import load_dotenv
+from pytz import timezone
 
 # Try to import SendGrid (optional)
 try:
@@ -212,9 +213,42 @@ Time: {timestamp}"""
             print(f"Error sending SMS: {e}")
             return False
     
+    def is_nasdaq_open(self):
+        """Check if NASDAQ is open (9:00 AM - 4:00 PM ET, Monday-Friday)
+        Returns True if market is open or within 30 minutes before opening"""
+        try:
+            # Get current time in Eastern Time (handles DST automatically)
+            et = timezone('US/Eastern')
+            now_et = datetime.now(et)
+            
+            # Check if it's a weekday (Monday=0, Friday=4)
+            weekday = now_et.weekday()
+            if weekday > 4:  # Saturday (5) or Sunday (6)
+                return False
+            
+            # Market hours: 9:00 AM - 4:00 PM ET (30 min before 9:30 AM opening)
+            current_time = now_et.time()
+            market_open = datetime.strptime("09:00", "%H:%M").time()
+            market_close = datetime.strptime("16:00", "%H:%M").time()
+            
+            # Return True if within market hours (including 30 min pre-market)
+            return market_open <= current_time < market_close
+        except Exception as e:
+            print(f"Error checking NASDAQ market hours: {e}")
+            # If we can't determine, default to not sending (safer)
+            return False
+    
     def send_email(self, subject, message_text, message_html=None):
-        """Send email notification using SendGrid API or SMTP"""
+        """Send email notification using SendGrid API or SMTP
+        Only sends during NASDAQ market hours (9:00 AM - 4:00 PM ET, Monday-Friday)"""
         if not self.email_notify_enable:
+            return False
+        
+        # Check if NASDAQ is open before sending emails
+        if not self.is_nasdaq_open():
+            et = timezone('US/Eastern')
+            now_et = datetime.now(et)
+            print(f"Market is closed. Skipping email notification. (Current ET time: {now_et.strftime('%Y-%m-%d %H:%M:%S %Z')})")
             return False
         
         # Use SendGrid API if available (preferred for cloud platforms)
